@@ -1,0 +1,65 @@
+version: '3.7'
+
+services:
+  database:
+    image: mariadb:10.4
+    container_name: database
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./database:/var/lib/mysql
+    networks:
+      - local
+
+  wordpress:
+    image: wordpress:5.2-php7.3-fpm
+    container_name: wordpress
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - WORDPRESS_DB_HOST=database:3306
+      - WORDPRESS_DB_USER=$MYSQL_USER
+      - WORDPRESS_DB_PASSWORD=$MYSQL_PASSWORD
+    volumes:
+      - ./wordpress:/var/www/html
+    links:
+      - database
+    depends_on:
+      - database
+    networks:
+      - local
+
+  nginx:
+    image: nginx:1.17
+    container_name: nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./logs/nginx:/var/log/nginx
+      - ./wordpress:/var/www/html
+      - ./cert:/etc/letsencrypt
+    ports:
+      - 80:80
+      - 443:443
+    links:
+      - wordpress
+    depends_on: 
+      - wordpress
+    networks:
+      - local
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    env_file: .env
+    volumes:
+      - ./cert:/etc/letsencrypt
+      - ./wordpress:/var/www/html
+    depends_on:
+      - nginx
+    command: certonly --webroot --webroot-path=/var/www/html --email ${EMAIL} --agree-tos --no-eff-email --force-renewal -d ${SITE_NAME}
+
+networks:
+  local:
+    driver: bridge
+
